@@ -1,285 +1,291 @@
-// Created by Satoshi Nakagawa <psychs AT limechat DOT net> <http://github.com/psychs/limechat>
-// Modifications by Codeux Software <support AT codeux DOT com> <https://github.com/codeux/Textual>
-// You can redistribute it and/or modify it under the new BSD license.
+/* ********************************************************************* 
+       _____        _               _    ___ ____   ____
+      |_   _|___  _| |_ _   _  __ _| |  |_ _|  _ \ / ___|
+       | |/ _ \ \/ / __| | | |/ _` | |   | || |_) | |
+       | |  __/>  <| |_| |_| | (_| | |   | ||  _ <| |___
+       |_|\___/_/\_\\__|\__,_|\__,_|_|  |___|_| \_\\____|
 
-#define TREE_USERLIST_HEIGHT    16.0
+ Copyright (c) 2010 — 2013 Codeux Software & respective contributors.
+        Please see Contributors.pdf and Acknowledgements.pdf
 
-@interface IRCChannel (Private)
-- (void)closeLogFile;
-@end
+ Redistribution and use in source and binary forms, with or without
+ modification, are permitted provided that the following conditions
+ are met:
+
+    * Redistributions of source code must retain the above copyright
+      notice, this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+    * Neither the name of the Textual IRC Client & Codeux Software nor the
+      names of its contributors may be used to endorse or promote products
+      derived from this software without specific prior written permission.
+
+ THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ SUCH DAMAGE.
+
+ *********************************************************************** */
+
+#import "TextualApplication.h"
+
+#define _treeUserlistHeight			16.0
 
 @implementation IRCChannel
 
-@synthesize client;
-@synthesize config;
-@synthesize errLastJoin;
-@synthesize isActive;
-@synthesize isHalfOp;
-@synthesize isModeInit;
-@synthesize isOp;
-@synthesize logDate;
-@synthesize logFile;
-@synthesize members;
-@synthesize mode;
-@synthesize status;
-@synthesize storedTopic;
-@synthesize topic;
+@synthesize client = _client;
+@synthesize operationQueue = _operationQueue;
 
 - (id)init
 {
 	if ((self = [super init])) {
-		mode    = [IRCChannelMode new];
-		members = [NSMutableArray new];
+		self.modeInfo = [IRCChannelMode new];
+		
+		self.memberList = [NSMutableArray new];
 	}
 	
 	return self;
 }
 
-- (void)dealloc
-{
-	[mode drain];
-	[topic drain];	
-	[config drain];
-	[logDate drain];
-	[logFile drain];
-	[members drain];
-	[storedTopic drain];
-	
-	[super dealloc];
-}
-
 #pragma mark -
-#pragma mark Init
+#pragma mark Configuration
 
 - (void)setup:(IRCChannelConfig *)seed
 {
-	[config autodrain];
-	config = [seed mutableCopy];
+	PointerIsEmptyAssert(seed);
+
+	if (PointerIsEmpty(self.config)) {
+		self.config = [seed mutableCopy];
+	}
 }
 
 - (void)updateConfig:(IRCChannelConfig *)seed
 {
-	[config autodrain];
-	config = [seed mutableCopy];
+	PointerIsEmptyAssert(seed);
+	
+	self.config = [seed mutableCopy];
 }
 
 - (NSMutableDictionary *)dictionaryValue
 {
-	return [config dictionaryValue];
+	return [self.config dictionaryValue];
 }
 
 #pragma mark -
-#pragma mark Properties
+#pragma mark Property Getter
 
 - (NSString *)name
 {
-	return config.name;
+	return self.config.channelName;
 }
 
-- (void)setName:(NSString *)value
+- (NSString *)secretKey
 {
-	config.name = value;
-}
-
-- (NSString *)password
-{
-	return ((config.password) ?: NSNullObject);
+	return self.config.secretKey;
 }
 
 - (BOOL)isChannel
 {
-	return (config.type == CHANNEL_TYPE_CHANNEL);
+	return (self.config.type == IRCChannelNormalType);
 }
 
-- (BOOL)isTalk
+- (BOOL)isPrivateMessage
 {
-	return (config.type == CHANNEL_TYPE_TALK);
+	return (self.config.type == IRCChannelPrivateMessageType);
 }
 
 - (NSString *)channelTypeString
 {
-	switch (config.type) {
-		case CHANNEL_TYPE_CHANNEL: return @"channel";
-		case CHANNEL_TYPE_TALK: return @"talk";
+	if (self.config.type == IRCChannelPrivateMessageType) {
+		return @"query";
 	}
-	
-	return nil;
+
+	return @"channel";
+}
+
+#pragma mark -
+#pragma mark Property Setter
+
+- (void)setName:(NSString *)value
+{
+	if ([self.name isEqualToString:value] == NO) {
+		self.config.channelName = value;
+	}
+}
+
+- (void)setTopic:(NSString *)topic
+{
+	if ([_topic isEqualToString:topic] == NO) {
+		_topic = topic;
+	}
+
+    [self.viewController setTopic:topic];
 }
 
 #pragma mark -
 #pragma mark Utilities
 
-- (void)terminate
-{
-	[self closeDialogs];
-	[self closeLogFile];
-}
-
-- (void)closeDialogs
-{
-	return;
-}
-
 - (void)preferencesChanged
 {
-	log.maxLines = [Preferences maxLogLines];
+	[self.viewController preferencesChanged];
 	
-	if (logFile) {
-		if ([Preferences logTranscript]) {
-			[logFile reopenIfNeeded];
-		} else {
-			[self closeLogFile];
-		}
-	}
+	[self reopenLogFileIfNeeded];
+}
+
+#pragma mark -
+#pragma mark Channel Status
+
+- (void)resetStatus:(IRCChannelStatus)newStatus
+{
+	self.errorOnLastJoinAttempt = NO;
+	
+	self.status = newStatus;
+
+    _topic = nil;
+	
+	[self.modeInfo clear];
+
+	[self clearMembers];
 }
 
 - (void)activate
 {
-	isActive = YES;
-	
-	[mode clear];
-	[members removeAllObjects];
-	
-	isOp = NO;
-	isHalfOp = NO;
-	
-	self.topic = nil;
-	
-	isModeInit = NO;
-	errLastJoin = NO;
-	
-	status = IRCChannelJoined;
-	
-	[self reloadMemberList];
+    [self.client postEventToViewController:@"channelJoined" forChannel:self];
+    
+	[self resetStatus:IRCChannelJoined];
 }
 
 - (void)deactivate
 {
-	[members removeAllObjects];
-	
-	isOp = NO;
-	isHalfOp = NO;
-	isActive = NO;
-	errLastJoin = NO;
-	
-	status = IRCChannelParted;
-	
-	[self reloadMemberList];
+    [self.client postEventToViewController:@"channelParted" forChannel:self];
+
+    [self.viewController setTopic:nil];
+    
+	[self resetStatus:IRCChannelParted];
 }
 
-- (void)detectOutgoingConversation:(NSString *)text
+- (void)terminate
 {
-	if (NSObjectIsNotEmpty([Preferences completionSuffix])) {
-		NSArray *pieces = [text split:[Preferences completionSuffix]];
-		
-		if ([pieces count] > 1) {
-			IRCUser *talker = [self findMember:[pieces safeObjectAtIndex:0]];
-			
-			if (talker) {
-				[talker incomingConversation];
-			}
+	[self resetStatus:IRCChannelTerminated];
+	
+	[self closeLogFile];
+
+	[self.viewController terminate];
+}
+
+#pragma mark -
+#pragma mark Log File
+
+- (void)reopenLogFileIfNeeded
+{
+	if ([TPCPreferences logTranscript]) {
+		PointerIsEmptyAssert(self.logFile);
+
+		[self.logFile reopenIfNeeded];
+	} else {
+		[self closeLogFile];
+	}
+}
+
+- (void)closeLogFile
+{
+	PointerIsEmptyAssert(self.logFile);
+
+	[self.logFile close];
+}
+
+#pragma mark -
+#pragma mark Printing
+
+- (void)writeToLogFile:(TVCLogLine *)line
+{
+	if ([TPCPreferences logTranscript]) {
+		if (PointerIsEmpty(self.logFile)) {
+			self.logFile = [TLOFileLogger new];
+
+			self.logFile.client = self.client;
+			self.logFile.channel = self;
+			self.logFile.writePlainText = YES;
+			self.logFile.flatFileStructure = NO;
+		}
+
+		NSString *logstr = [self.viewController renderedBodyForTranscriptLog:line];
+
+		if (NSObjectIsNotEmpty(logstr)) {
+			[self.logFile writePlainTextLine:logstr];
 		}
 	}
 }
 
-- (BOOL)print:(LogLine *)line
+- (void)print:(TVCLogLine *)logLine
 {
-	return [self print:line withHTML:NO];
+	[self print:logLine completionBlock:NULL];
 }
 
-- (BOOL)print:(LogLine *)line withHTML:(BOOL)rawHTML
+- (void)print:(TVCLogLine *)logLine completionBlock:(void(^)(BOOL highlighted))completionBlock
 {
-	BOOL result = [log print:line withHTML:rawHTML];
+	[self.viewController print:logLine completionBlock:completionBlock];
 	
-	if ([Preferences logTranscript]) {
-		if (PointerIsEmpty(logFile)) {
-			logFile = [FileLogger new];
-			logFile.client = client;
-			logFile.channel = self;
-		}
-		
-		NSString *comp = [NSString stringWithFormat:@"%@", [[NSDate date] dateWithCalendarFormat:@"%Y%m%d%H%M%S" timeZone:nil]];
-		
-		if (logDate) {
-			if ([logDate isEqualToString:comp] == NO) {
-				[logDate drain];
-				
-				logDate = [comp retain];
-				[logFile reopenIfNeeded];
-			}
-		} else {
-			logDate = [comp retain];
-		}
-		
-		NSString *nickStr = NSNullObject;
-		
-		if (line.nick) {
-			nickStr = [NSString stringWithFormat:@"%@: ", line.nickInfo];
-		}
-		
-		NSString *s = [NSString stringWithFormat:@"%@%@%@", line.time, nickStr, line.body];
-		
-		[logFile writeLine:s];
-	}
-	
-	return result;
+	[self writeToLogFile:logLine];
 }
 
 #pragma mark -
 #pragma mark Member List
 
+- (void)sortedMemberListReload
+{
+	/* Do not call this unless needed. */
+	self.memberList = [self.memberList sortedArrayUsingComparator:NSDefaultComparator];
+	self.memberListLengthSorted = [self.memberList sortedArrayUsingComparator:[IRCUser nicknameLengthComparator]];
+
+	[self reloadMemberList];
+}
+
 - (void)sortedInsert:(IRCUser *)item
 {
-	const NSInteger LINEAR_SEARCH_THRESHOLD = 5;
-	
-	NSInteger left = 0;
-	NSInteger right = members.count;
-	
-	while (right - left > LINEAR_SEARCH_THRESHOLD) {
-		NSInteger i = ((left + right) / 2);
-		
-		IRCUser *t = [members safeObjectAtIndex:i];
-		
-		if ([t compare:item] == NSOrderedAscending) {
-			left = (i + 1);
-		} else {
-			right = (i + 1);
-		}
-	}
-	
-	for (NSInteger i = left; i < right; ++i) {
-		IRCUser *t = [members safeObjectAtIndex:i];
-		
-		if ([t compare:item] == NSOrderedDescending) {
-			[members safeInsertObject:item atIndex:i];
-			
-			return;
-		}
-	}
-	
-	[members safeAddObject:item];
+	PointerIsEmptyAssert(item);
+
+	self.memberList = [self.memberList arrayByInsertingSortedObject:item usingComparator:NSDefaultComparator];
+
+	/* Conversation tracking scans based on nickname length. */
+	self.memberListLengthSorted = [self.memberList arrayByInsertingSortedObject:item usingComparator:[IRCUser nicknameLengthComparator]];
 }
+
+#pragma mark -
 
 - (void)addMember:(IRCUser *)user
 {
 	[self addMember:user reload:YES];
 }
 
+- (void)updateOrAddMember:(IRCUser *)user
+{
+	[self addMember:user reload:NO];
+}
+
 - (void)addMember:(IRCUser *)user reload:(BOOL)reload
 {
-	NSInteger n = [self indexOfMember:user.nick];
+	PointerIsEmptyAssert(user);
 	
-	if (n >= 0) {
-		[[members safeObjectAtIndex:n] adrv];
-		[members safeRemoveObjectAtIndex:n];
-	}
-	
+	[self removeMember:user.nickname reload:NO];
 	[self sortedInsert:user];
+
+    [self.client postEventToViewController:@"channelMemberAdded" forChannel:self];
 	
 	if (reload) {
 		[self reloadMemberList];
 	}
 }
+
+#pragma mark -
 
 - (void)removeMember:(NSString *)nick
 {
@@ -288,98 +294,94 @@
 
 - (void)removeMember:(NSString *)nick reload:(BOOL)reload
 {
-	NSInteger n = [self indexOfMember:nick];
+	NSObjectIsEmptyAssert(nick);
 	
-	if (n >= 0) {
-		[[members safeObjectAtIndex:n] adrv];
-		[members safeRemoveObjectAtIndex:n];
+	NSInteger n = [self indexOfMember:nick];
+
+	if (NSDissimilarObjects(n, NSNotFound)) {
+		IRCUser *user = [self.memberList objectAtIndex:n];
+
+		self.memberList = [self.memberList arrayByRemovingObjectAtIndex:n];
+
+        [self.client postEventToViewController:@"channelMemberRemoved" forChannel:self];
+
+		n = [self.memberListLengthSorted indexOfObject:user];
+
+		self.memberListLengthSorted = [self.memberListLengthSorted arrayByRemovingObjectAtIndex:n];
 	}
 	
-	if (reload) [self reloadMemberList];
+	if (reload) {
+		[self reloadMemberList];
+	}
 }
+
+#pragma mark -
 
 - (void)renameMember:(NSString *)fromNick to:(NSString *)toNick
 {
+	NSObjectIsEmptyAssert(fromNick);
+	NSObjectIsEmptyAssert(toNick);
+	
 	NSInteger n = [self indexOfMember:fromNick];
+
+	NSAssertReturn(NSDissimilarObjects(n, NSNotFound));
 	
-	if (n >= 0) {
-		IRCUser *m = [members safeObjectAtIndex:n];
-		
-		[m adrv];
-		
-		[self removeMember:toNick reload:NO];
-		
-		m.nick = toNick;
-		
-		[[members safeObjectAtIndex:n] adrv];
-		[members safeRemoveObjectAtIndex:n];
-		
-		[self sortedInsert:m];
-		[self reloadMemberList];
-	}
+	IRCUser *m = [self memberAtIndex:n];
+	
+	m.nickname = toNick;
+
+	[self removeMember:m.nickname reload:NO];
+	
+	[self sortedInsert:m];
+	[self reloadMemberList];
 }
 
-- (void)updateOrAddMember:(IRCUser *)user
-{
-	NSInteger n = [self indexOfMember:user.nick];
-	
-	if (n >= 0) {
-		[[members safeObjectAtIndex:n] adrv];
-		[members safeRemoveObjectAtIndex:n];
-	}
-	
-	[self sortedInsert:user];
-}
+#pragma mark -
 
-- (void)changeMember:(NSString *)nick mode:(char)modeChar value:(BOOL)value
+- (void)changeMember:(NSString *)nick mode:(NSString *)mode value:(BOOL)value
 {
+	NSObjectIsEmptyAssert(nick);
+	NSObjectIsEmptyAssert(mode);
+	
 	NSInteger n = [self indexOfMember:nick];
+
+	NSAssertReturn(NSDissimilarObjects(n, NSNotFound));
 	
-	if (n >= 0) {
-		IRCUser *m = [members safeObjectAtIndex:n];
-		
-		switch (modeChar) {
-			case 'q': m.q = value; break;
-			case 'a': m.a = value; break;
-			case 'o': m.o = value; break;
-			case 'h': m.h = value; break;
-			case 'v': m.v = value; break;
-		}
-		
-		[[members safeObjectAtIndex:n] adrv];
-		[members safeRemoveObjectAtIndex:n];
-		
-		if (m.q && NSObjectIsEmpty(client.isupport.userModeQPrefix)) {
-			m.q = NO;
-		}
-		
-		if (m.a && NSObjectIsEmpty(client.isupport.userModeAPrefix)) {
-			m.a = NO;
-		}
-		
-		if (m.o && NSObjectIsEmpty(client.isupport.userModeOPrefix)) {
-			m.o = NO;
-		}
-		
-		if (m.h && NSObjectIsEmpty(client.isupport.userModeHPrefix)) {
-			m.h = NO;
-		}
-		
-		if (m.v && NSObjectIsEmpty(client.isupport.userModeVPrefix)) {
-			m.v = NO;
-		}
-		
-		[self sortedInsert:m];
-		[self reloadMemberList];
+	IRCUser *m = [self memberAtIndex:n];
+	
+	switch ([mode characterAtIndex:0]) {
+		case 'q': { m.q = value; break; }
+		case 'a': { m.a = value; break; }
+		case 'o': { m.o = value; break; }
+		case 'h': { m.h = value; break; }
+		case 'v': { m.v = value; break; }
 	}
+	
+	[self removeMember:m.nickname reload:NO];
+
+	IRCISupportInfo *isupport = self.client.isupport;
+
+	m.q = (m.q && [isupport modeIsSupportedUserPrefix:@"q"]);
+	m.a = (m.a && [isupport modeIsSupportedUserPrefix:@"a"]);
+	m.o = (m.o && [isupport modeIsSupportedUserPrefix:@"o"]);
+	m.h = (m.h && [isupport modeIsSupportedUserPrefix:@"h"]);
+	m.v = (m.v && [isupport modeIsSupportedUserPrefix:@"v"]);
+	
+	[self sortedInsert:m];
+	[self reloadMemberList];
 }
+
+#pragma mark -
 
 - (void)clearMembers
 {
-	[members removeAllObjects];
+	self.memberList = nil;
+	self.memberList = @[];
 	
 	[self reloadMemberList];
 }
+
+#pragma mark -
 
 - (NSInteger)indexOfMember:(NSString *)nick
 {
@@ -388,29 +390,25 @@
 
 - (NSInteger)indexOfMember:(NSString *)nick options:(NSStringCompareOptions)mask
 {
-	NSInteger i = -1;
-	
-	for (IRCUser *m in members) {
-		i++;
-		
-		if (mask & NSCaseInsensitiveSearch) {
-			if ([nick isEqualNoCase:m.nick]) {
-				return i;
-			}
-		} else {
-			if ([m.nick isEqualToString:nick]) {
-				return i;
-			}
-		}
+	NSObjectIsEmptyAssertReturn(nick, -1);
+
+	//[self.memberList indexOfObjectMatchingValue:nick withKeyPath:@"nickname"];
+
+	if (mask & NSCaseInsensitiveSearch) {
+		return [self.memberList indexOfObjectMatchingValue:nick withKeyPath:@"nickname" usingSelector:@selector(isEqualIgnoringCase:)];
+	} else {
+		return [self.memberList indexOfObjectMatchingValue:nick withKeyPath:@"nickname" usingSelector:@selector(isEqualToString:)];
 	}
-	
-	return -1;
 }
+
+#pragma mark -
 
 - (IRCUser *)memberAtIndex:(NSInteger)index
 {
-	return [members safeObjectAtIndex:index];
+	return [self.memberList safeObjectAtIndex:index];
 }
+
+#pragma mark -
 
 - (IRCUser *)findMember:(NSString *)nick
 {
@@ -420,35 +418,35 @@
 - (IRCUser *)findMember:(NSString *)nick options:(NSStringCompareOptions)mask
 {
 	NSInteger n = [self indexOfMember:nick options:mask];
+
+	NSAssertReturnR(NSDissimilarObjects(n, NSNotFound), nil);
 	
-	if (n >= 0) {
-		return [members safeObjectAtIndex:n];
-	}
-	
-	return nil;
+	return [self memberAtIndex:n];
 }
+
+#pragma mark -
 
 - (NSInteger)numberOfMembers
 {
-	return members.count;
+	return self.memberList.count;
 }
+
+#pragma mark -
 
 - (void)reloadMemberList
 {
-	if (client.world.selected == self) {
-		[client.world.memberList reloadData];
-	}
-}
-
-- (void)closeLogFile
-{
-	if (logFile) {
-		[logFile close];
+	if (self.worldController.selectedItem == self) {
+		[self.masterController.memberList reloadData];
 	}
 }
 
 #pragma mark -
 #pragma mark IRCTreeItem
+
+- (BOOL)isActive
+{
+	return (self.status == IRCChannelJoined);
+}
 
 - (BOOL)isClient
 {
@@ -467,7 +465,17 @@
 
 - (NSString *)label
 {
-	return config.name;
+	return self.config.channelName;
+}
+
+- (IRCClient *)client
+{
+	return _client;
+}
+
+- (TVCLogControllerOperationQueue *)operationQueue
+{
+    return [_client operationQueue];
 }
 
 #pragma mark -
@@ -475,26 +483,24 @@
 
 - (NSInteger)numberOfRowsInTableView:(NSTableView *)sender
 {
-	return members.count;
+	return [self numberOfMembers];
 }
 
 - (CGFloat)tableView:(NSTableView *)tableView heightOfRow:(NSInteger)row
 {
-    return TREE_USERLIST_HEIGHT;
+    return _treeUserlistHeight;
 }
 
 - (id)tableView:(NSTableView *)sender objectValueForTableColumn:(NSTableColumn *)column row:(NSInteger)row
 {
-	IRCUser *user = [members safeObjectAtIndex:row];
-	
-	return TXTFLS(@"ACCESSIBILITY_MEMBER_LIST_DESCRIPTION", [user nick], [config.name safeSubstringFromIndex:1]);
+	IRCUser *user = [self memberAtIndex:row];
+
+	return TXTFLS(@"AccessibilityMemberListDescription", user.nickname, [self.name channelNameToken]);
 }
 
-- (void)tableView:(NSTableView *)sender willDisplayCell:(MemberListCell *)cell forTableColumn:(NSTableColumn *)column row:(NSInteger)row
+- (void)tableView:(NSTableView *)sender willDisplayCell:(TVCMemberListCell *)cell forTableColumn:(NSTableColumn *)column row:(NSInteger)row
 {
-    cell.cellItem   = cell;
-    cell.parent     = client.world.memberList;
-	cell.member     = [members safeObjectAtIndex:row];
+	cell.memberPointer = self.memberList[row];
 }
 
 @end

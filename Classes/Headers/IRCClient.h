@@ -1,201 +1,144 @@
-// Created by Satoshi Nakagawa <psychs AT limechat DOT net> <http://github.com/psychs/limechat>
-// Modifications by Codeux Software <support AT codeux DOT com> <https://github.com/codeux/Textual>
-// You can redistribute it and/or modify it under the new BSD license.
+/* ********************************************************************* 
+       _____        _               _    ___ ____   ____
+      |_   _|___  _| |_ _   _  __ _| |  |_ _|  _ \ / ___|
+       | |/ _ \ \/ / __| | | |/ _` | |   | || |_) | |
+       | |  __/>  <| |_| |_| | (_| | |   | ||  _ <| |___
+       |_|\___/_/\_\\__|\__,_|\__,_|_|  |___|_| \_\\____|
 
-@class IRCWorld;
+ Copyright (c) 2010 — 2013 Codeux Software & respective contributors.
+        Please see Contributors.pdf and Acknowledgements.pdf
 
-typedef enum {
-	CONNECT_NORMAL,
-	CONNECT_RETRY,
-	CONNECT_RECONNECT,
-	CONNECT_BADSSL_CRT_RECONNECT,
-} ConnectMode;
+ Redistribution and use in source and binary forms, with or without
+ modification, are permitted provided that the following conditions
+ are met:
 
-typedef enum {
-	DISCONNECT_NORMAL,
-	DISCONNECT_TRIAL_PERIOD,
-	DISCONNECT_BAD_SSL_CERT,
-    DISCONNECT_SLEEP_MODE,
-} DisconnectType;
+    * Redistributions of source code must retain the above copyright
+      notice, this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+    * Neither the name of the Textual IRC Client & Codeux Software nor the
+      names of its contributors may be used to endorse or promote products
+      derived from this software without specific prior written permission.
+
+ THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ SUCH DAMAGE.
+
+ *********************************************************************** */
+
+#import "IRCTreeItem.h" // superclass
+
+#import "TVCLogLine.h"			// typedef enum
+#import "TLOGrowlController.h"	// typedef enum
+
+typedef enum IRCConnectMode : NSInteger {
+	IRCConnectNormalMode,
+	IRCConnectRetryMode,
+	IRCConnectReconnectMode,
+	IRCConnectBadSSLCertificateMode,
+} IRCConnectMode;
+
+typedef enum IRCDisconnectMode : NSInteger {
+	IRCDisconnectNormalMode,
+	IRCDisconnectTrialPeriodMode,
+	IRCDisconnectComputerSleepMode,
+	IRCDisconnectBadSSLCertificateMode,
+	IRCDisconnectServerRedirectMode,
+} IRCDisconnectMode;
 
 @interface IRCClient : IRCTreeItem
-{
-	IRCWorld *world;
-	IRCConnection *conn;
-	IRCClientConfig *config;
-	IRCISupportInfo *isupport;
-	
-	IRCChannel *whoisChannel;
-	IRCChannel *lastSelectedChannel;
-	
-	NSMutableArray *channels;
-	NSMutableArray *highlights;
-	NSMutableArray *commandQueue;
-	
-	NSMutableDictionary *trackedUsers;
-	
-	NSInteger connectDelay;
-	NSInteger tryingNickNumber;
-	
-	NSMutableArray *pendingCaps;
-	NSMutableArray *acceptedCaps;
-	
-	NSUInteger capPaused;
+/* Public information. They are considered read-only outside of
+ IRCClient. Just not enforced. Play nice plugins. */
 
-	BOOL isAway;
-	BOOL hasIRCopAccess;
-	
-	BOOL sendLagcheckToChannel;
-	
-    BOOL isIdentifiedWithSASL;
-	BOOL reconnectEnabled;
-	BOOL rawModeEnabled;
-	BOOL retryEnabled;
-	BOOL isConnecting;
-	BOOL isConnected;
-	BOOL isLoggedIn;
-	BOOL isQuitting;
-	
-	BOOL serverHasNickServ;
-	BOOL autojoinInitialized;
-	
-	BOOL userhostInNames;
-	BOOL multiPrefix;
-	BOOL identifyMsg;
-	BOOL identifyCTCP;
-	BOOL inWhoInfoRun;
-    BOOL inSASLRequest;
-	BOOL inWhoWasRun;
-	BOOL inFirstISONRun;
-	
-	CFAbsoluteTime lastLagCheck;
-	
-	NSStringEncoding encoding;
-	
-	NSString *logDate;
-	
-	NSString *inputNick;
-	NSString *sentNick;
-	NSString *myNick;
-	NSString *myHost;
-	
-	NSString *serverHostname;
-	
-	Timer *isonTimer;
-	Timer *pongTimer;
-	Timer *retryTimer;
-	Timer *autoJoinTimer;
-	Timer *reconnectTimer;
-	Timer *commandQueueTimer;
-	
-	ConnectMode connectType;
-	DisconnectType disconnectType;
-	
-	ListDialog *channelListDialog;
-	ChanBanSheet *chanBanListSheet;
-	ChanBanExceptionSheet *banExceptionSheet;
-	ChanInviteExceptionSheet *inviteExceptionSheet;
-	
-	NSInteger lastMessageReceived;
-	
-	FileLogger *logFile;
-	
-#ifdef IS_TRIAL_BINARY
-	Timer *trialPeriodTimer;
-#endif
-}
+@property (nonatomic, strong) IRCClientConfig *config;
+@property (nonatomic, strong) IRCISupportInfo *isupport;
+@property (nonatomic, assign) IRCConnectMode connectType;
+@property (nonatomic, assign) IRCDisconnectMode disconnectType;
+@property (nonatomic, assign) NSInteger connectDelay;
+@property (nonatomic, assign) BOOL autojoinInProgress;			// YES if autojoin is running, else NO.
+@property (nonatomic, assign) BOOL hasIRCopAccess;				// YES if local user is IRCOp, else NO.
+@property (nonatomic, assign) BOOL isAutojoined;				// YES if autojoin has been completed, else NO.
+@property (nonatomic, assign) BOOL isAway;						// YES if Textual has knowledge of local user being away, else NO.
+@property (nonatomic, assign) BOOL isConnected;					// YES if socket is connected, else NO.
+@property (nonatomic, assign) BOOL isConnecting;				// YES if socket is connecting, else, NO. Set to NO on raw numeric 001.
+@property (nonatomic, assign) BOOL isIdentifiedWithNickServ;	// YES if NickServ identification was successful, else NO.
+@property (nonatomic, assign) BOOL isLoggedIn;					// YES if connected to server, else NO. Set to YES on raw numeric 001.
+@property (nonatomic, assign) BOOL isQuitting;					// YES if connection to IRC server is being quit, else NO.
+@property (nonatomic, assign) BOOL isWaitingForNickServ;		// YES if NickServ identification is pending, else NO.
+@property (nonatomic, assign) BOOL rawModeEnabled;				// YES if sent & received data should be logged to console, else NO.
+@property (nonatomic, assign) BOOL reconnectEnabled;			// YES if reconnection is allowed, else NO.
+@property (nonatomic, assign) BOOL serverHasNickServ;			// YES if NickServ service was found on server, else NO.
+@property (nonatomic, assign) BOOL CAPidentifyCTCP;				// YES if identify-ctcp CAP supported.
+@property (nonatomic, assign) BOOL CAPidentifyMsg;				// YES if identify-msg CAP supported.
+@property (nonatomic, assign) BOOL CAPinSASLRequest;			// YES if in SASL CAP authentication request, else NO.
+@property (nonatomic, assign) BOOL CAPisIdentifiedWithSASL;		// YES if SASL authentication was successful, else NO.
+@property (nonatomic, assign) BOOL CAPmultiPrefix;				// YES if multi-prefix CAP supported.
+@property (nonatomic, assign) BOOL CAPuserhostInNames;			// YES if userhost-in-names CAP supported.
+@property (nonatomic, assign) BOOL CAPawayNotify;               // YES if away-notify CAP supported.
+@property (nonatomic, assign) BOOL CAPWatchCommand;				// YES if the WATCH command is supported.
+@property (nonatomic, strong) NSMutableArray *CAPacceptedCaps;
+@property (nonatomic, strong) NSMutableArray *CAPpendingCaps;
+@property (nonatomic, strong) IRCChannel *lastSelectedChannel;
+@property (nonatomic, strong) NSMutableArray *channels;
+@property (nonatomic, strong) NSMutableArray *highlights;
+@property (nonatomic, strong) NSString *preAwayNickname; // Nickname before away was set.
+@property (nonatomic, assign) NSTimeInterval lastMessageReceived;
+@property (nonatomic, strong) NSString *serverRedirectAddressTemporaryStore; // Temporary store for RPL_BOUNCE (010) redirects.
+@property (nonatomic, assign) NSInteger serverRedirectPortTemporaryStore; // Temporary store for RPL_BOUNCE (010) redirects.
+@property (nonatomic, assign) BOOL isHostReachable;
 
-@property (nonatomic, retain) IRCWorld *world;
-@property (nonatomic, retain) IRCConnection *conn;
-@property (nonatomic, retain) IRCClientConfig *config;
-@property (nonatomic, retain) IRCISupportInfo *isupport;
-@property (nonatomic, retain) IRCChannel *whoisChannel;
-@property (nonatomic, retain) IRCChannel *lastSelectedChannel;
-@property (nonatomic, retain) NSMutableArray *channels;
-@property (nonatomic, retain) NSMutableArray *highlights;
-@property (nonatomic, retain) NSMutableArray *commandQueue;
-@property (nonatomic, retain) NSMutableDictionary *trackedUsers;
-@property (nonatomic, retain) NSMutableArray *pendingCaps;
-@property (nonatomic, retain) NSMutableArray *acceptedCaps;
-@property (nonatomic, assign) CFAbsoluteTime lastLagCheck;
-@property (nonatomic, assign, setter=autoConnect:, getter=connectDelay) NSInteger connectDelay;
-@property (nonatomic, assign) NSInteger tryingNickNumber;
-@property (nonatomic, assign) BOOL isAway;
-@property (nonatomic, assign) BOOL inWhoInfoRun;
-@property (nonatomic, assign) BOOL inWhoWasRun;
-@property (nonatomic, assign) BOOL userhostInNames;
-@property (nonatomic, assign) BOOL multiPrefix;
-@property (nonatomic, assign) BOOL identifyMsg;
-@property (nonatomic, assign) BOOL identifyCTCP;
-@property (nonatomic, assign) BOOL inFirstISONRun;
-@property (nonatomic, assign) BOOL hasIRCopAccess;
-@property (nonatomic, assign) BOOL reconnectEnabled;
-@property (nonatomic, assign) BOOL rawModeEnabled;
-@property (nonatomic, assign) BOOL retryEnabled;
-@property (nonatomic, assign) BOOL isConnecting;
-@property (nonatomic, assign) BOOL isConnected;
-@property (nonatomic, assign) BOOL isLoggedIn;
-@property (nonatomic, assign) BOOL isQuitting;
-@property (nonatomic, assign) BOOL inSASLRequest;
-@property (nonatomic, assign) BOOL serverHasNickServ;
-@property (nonatomic, assign) BOOL autojoinInitialized;
-@property (nonatomic, assign) BOOL sendLagcheckToChannel;
-@property (nonatomic, assign) BOOL isIdentifiedWithSASL;
-@property (nonatomic, retain) FileLogger *logFile;
-@property (nonatomic, assign) NSStringEncoding encoding;
-@property (nonatomic, retain) NSString *logDate;
-@property (nonatomic, retain) NSString *inputNick;
-@property (nonatomic, retain) NSString *sentNick;
-@property (nonatomic, retain) NSString *myNick;
-@property (nonatomic, retain) NSString *myHost;
-@property (nonatomic, retain) NSString *serverHostname;
-@property (nonatomic, retain) Timer *isonTimer;
-@property (nonatomic, retain) Timer *pongTimer;
-@property (nonatomic, retain) Timer *retryTimer;
-@property (nonatomic, retain) Timer *autoJoinTimer;
-@property (nonatomic, retain) Timer *reconnectTimer;
-@property (nonatomic, retain) Timer *commandQueueTimer;
-@property (nonatomic, assign) NSInteger lastMessageReceived;
-@property (nonatomic, assign) ConnectMode connectType;
-@property (nonatomic, assign) DisconnectType disconnectType;
-@property (nonatomic, retain) ListDialog *channelListDialog;
-@property (nonatomic, retain) ChanBanSheet *chanBanListSheet;
-@property (nonatomic, retain) ChanBanExceptionSheet *banExceptionSheet;
-@property (nonatomic, retain) ChanInviteExceptionSheet *inviteExceptionSheet;
-
-- (void)setup:(IRCClientConfig *)seed;
+- (void)setup:(id)seed;
 - (void)updateConfig:(IRCClientConfig *)seed;
 - (IRCClientConfig *)storedConfig;
 - (NSMutableDictionary *)dictionaryValue;
 
-- (void)autoConnect:(NSInteger)delay;
+- (NSString *)networkName; // Only returns the actual network name.
+- (NSString *)altNetworkName; // Will return the configured name if the actual name is not available.
+- (NSString *)networkAddress;
+
+- (NSString *)localNickname;
+- (NSString *)localHostmask;
+
+- (void)autoConnect:(NSInteger)delay afterWakeUp:(BOOL)afterWakeUp;
+
 - (void)terminate;
 - (void)closeDialogs;
 - (void)preferencesChanged;
 
 - (BOOL)isReconnecting;
 
-- (AddressBook *)checkIgnoreAgainstHostmask:(NSString *)host withMatches:(NSArray *)matches;
+- (void)postEventToViewController:(NSString *)eventToken;
+- (void)postEventToViewController:(NSString *)eventToken forChannel:(IRCChannel *)channel;
 
-- (BOOL)encryptOutgoingMessage:(NSString **)message channel:(IRCChannel *)chan;
-- (void)decryptIncomingMessage:(NSString **)message channel:(IRCChannel *)chan;
+- (IRCAddressBook *)checkIgnoreAgainstHostmask:(NSString *)host withMatches:(NSArray *)matches;
+
+- (BOOL)encryptOutgoingMessage:(NSString **)message channel:(IRCChannel *)channel;
+- (void)decryptIncomingMessage:(NSString **)message channel:(IRCChannel *)channel;
+
+- (BOOL)outputRuleMatchedInMessage:(NSString *)raw inChannel:(IRCChannel *)chan withLineType:(TVCLogLineType)type;
 
 - (void)connect;
-- (void)connect:(ConnectMode)mode;
+- (void)connect:(IRCConnectMode)mode;
 - (void)disconnect;
 - (void)quit;
 - (void)quit:(NSString *)comment;
 - (void)cancelReconnect;
 
-- (BOOL)IRCopStatus;
-
 - (void)sendNextCap;
 - (void)pauseCap;
 - (void)resumeCap;
-- (BOOL)isCapAvailable:(NSString*)cap;
-- (void)cap:(NSString*)cap result:(BOOL)supported;
+- (BOOL)isCapAvailable:(NSString *)cap;
+- (void)cap:(NSString *)cap result:(BOOL)supported;
 
-- (void)joinChannels:(NSArray *)chans;
 - (void)joinChannel:(IRCChannel *)channel;
 - (void)joinChannel:(IRCChannel *)channel password:(NSString *)password;
 - (void)joinUnlistedChannel:(NSString *)channel;
@@ -208,63 +151,87 @@ typedef enum {
 
 - (void)sendWhois:(NSString *)nick;
 - (void)changeNick:(NSString *)newNick;
-- (void)changeOp:(IRCChannel *)channel users:(NSArray *)users mode:(char)mode value:(BOOL)value;
 - (void)kick:(IRCChannel *)channel target:(NSString *)nick;
 - (void)sendCTCPQuery:(NSString *)target command:(NSString *)command text:(NSString *)text;
 - (void)sendCTCPReply:(NSString *)target command:(NSString *)command text:(NSString *)text;
 - (void)sendCTCPPing:(NSString *)target;
+
+- (void)toggleAwayStatus:(BOOL)setAway;
+- (void)toggleAwayStatus:(BOOL)setAway withReason:(NSString *)reason;
 
 - (void)createChannelListDialog;
 - (void)createChanBanListDialog;
 - (void)createChanBanExceptionListDialog;
 - (void)createChanInviteExceptionListDialog;
 
-- (BOOL)sendCommand:(id)str;
-- (BOOL)sendCommand:(id)str completeTarget:(BOOL)completeTarget target:(NSString *)targetChannelName;
+- (void)sendCommand:(id)str;
+- (void)sendCommand:(id)str completeTarget:(BOOL)completeTarget target:(NSString *)targetChannelName;
 - (void)sendText:(NSAttributedString *)str command:(NSString *)command channel:(IRCChannel *)channel;
-- (BOOL)inputText:(id)str command:(NSString *)command;
+- (void)sendText:(NSAttributedString *)str command:(NSString *)command channel:(IRCChannel *)channel withEncryption:(BOOL)encryptChat;
+- (void)inputText:(id)str command:(NSString *)command;
 
 - (void)sendLine:(NSString *)str;
 - (void)send:(NSString *)str, ...;
 
-- (NSInteger)indexOfTalkChannel;
+- (NSInteger)indexOfFirstPrivateMessage;
 
 - (IRCChannel *)findChannel:(NSString *)name;
 - (IRCChannel *)findChannelOrCreate:(NSString *)name;
-- (IRCChannel *)findChannelOrCreate:(NSString *)name useTalk:(BOOL)doTalk;
+- (IRCChannel *)findChannelOrCreate:(NSString *)name isPrivateMessage:(BOOL)isPM;
+
+- (NSData *)convertToCommonEncoding:(NSString *)data;
+- (NSString *)convertFromCommonEncoding:(NSData *)data;
+
+- (NSString *)formatNick:(NSString *)nick channel:(IRCChannel *)channel;
 
 - (void)sendPrivmsgToSelectedChannel:(NSString *)message;
 
-- (BOOL)printRawHTMLToCurrentChannel:(NSString *)text receivedAt:(NSDate*)receivedAt;
-- (BOOL)printRawHTMLToCurrentChannelWithoutTime:(NSString *)text receivedAt:(NSDate*)receivedAt;
-- (BOOL)printRawHTMLToCurrentChannel:(NSString *)text withTimestamp:(BOOL)showTime receivedAt:(NSDate*)receivedAt;
-
-- (BOOL)printBoth:(id)chan type:(LogLineType)type text:(NSString *)text;
-- (BOOL)printBoth:(id)chan type:(LogLineType)type text:(NSString *)text receivedAt:(NSDate*)receivedAt;
-- (BOOL)printBoth:(id)chan type:(LogLineType)type nick:(NSString *)nick text:(NSString *)text identified:(BOOL)identified;
-- (BOOL)printBoth:(id)chan type:(LogLineType)type nick:(NSString *)nick text:(NSString *)text identified:(BOOL)identified receivedAt:(NSDate*)receivedAt;
-- (BOOL)printChannel:(IRCChannel *)channel type:(LogLineType)type text:(NSString *)text receivedAt:(NSDate*)receivedAt;
-- (BOOL)printAndLog:(LogLine *)line withHTML:(BOOL)rawHTML;
-- (BOOL)printChannel:(IRCChannel *)channel type:(LogLineType)type nick:(NSString *)nick text:(NSString *)text identified:(BOOL)identified receivedAt:(NSDate*)receivedAt;
-- (void)printSystem:(id)channel text:(NSString *)text;
-- (void)printSystem:(id)channel text:(NSString *)text receivedAt:(NSDate*)receivedAt;
-- (void)printSystemBoth:(id)channel text:(NSString *)text;
-- (void)printSystemBoth:(id)channel text:(NSString *)text receivedAt:(NSDate*)receivedAt;
-- (void)printReply:(IRCMessage *)m;
-- (void)printUnknownReply:(IRCMessage *)m;
-- (void)printDebugInformation:(NSString *)m;
-- (void)printDebugInformationToConsole:(NSString *)m;
-- (void)printDebugInformation:(NSString *)m channel:(IRCChannel *)channel;
-- (void)printErrorReply:(IRCMessage *)m;
-- (void)printErrorReply:(IRCMessage *)m channel:(IRCChannel *)channel;
-- (void)printError:(NSString *)error;
-
-- (BOOL)notifyEvent:(NotificationType)type lineType:(LogLineType)ltype;
-- (BOOL)notifyEvent:(NotificationType)type lineType:(LogLineType)ltype target:(id)target nick:(NSString *)nick text:(NSString *)text;
-- (BOOL)notifyText:(NotificationType)type lineType:(LogLineType)ltype target:(id)target nick:(NSString *)nick text:(NSString *)text;
+- (BOOL)notifyEvent:(TXNotificationType)type lineType:(TVCLogLineType)ltype;
+- (BOOL)notifyEvent:(TXNotificationType)type lineType:(TVCLogLineType)ltype target:(IRCChannel *)target nick:(NSString *)nick text:(NSString *)text;
+- (BOOL)notifyText:(TXNotificationType)type lineType:(TVCLogLineType)ltype target:(IRCChannel *)target nick:(NSString *)nick text:(NSString *)text;
 
 - (void)populateISONTrackedUsersList:(NSMutableArray *)ignores;
 
-- (BOOL)outputRuleMatchedInMessage:(NSString *)raw inChannel:(IRCChannel *)chan withLineType:(LogLineType)type;
+#pragma mark -
 
+/* ------ */
+/* All print calls point to this single one: */
+- (void)print:(id)chan					// An IRCChannel or nil for the console.
+		 type:(TVCLogLineType)type		// The line type. See TVCLogLine.h
+		 nick:(NSString *)nick			// The nickname associated with the print.
+		 text:(NSString *)text			// The actual text being printed.
+	encrypted:(BOOL)isEncrypted			// Is the text encrypted?
+   receivedAt:(NSDate *)receivedAt		// The time the message was received at for the timestamp.
+	  command:(NSString *)command;		// Can be the actual command (PRIVMSG, NOTICE, etc.) or a raw numeric (001, 002, etc.) — 000 = internal debug command.
+/* ------ */
+
+- (void)print:(id)chan type:(TVCLogLineType)type nick:(NSString *)nick text:(NSString *)text command:(NSString *)command;
+- (void)print:(id)chan type:(TVCLogLineType)type nick:(NSString *)nick text:(NSString *)text receivedAt:(NSDate *)receivedAt command:(NSString *)command;
+
+- (void)printReply:(IRCMessage *)m;
+- (void)printUnknownReply:(IRCMessage *)m;
+
+- (void)printDebugInformation:(NSString *)m;
+- (void)printDebugInformation:(NSString *)m forCommand:(NSString *)command;
+
+- (void)printDebugInformationToConsole:(NSString *)m;
+- (void)printDebugInformationToConsole:(NSString *)m forCommand:(NSString *)command;
+
+- (void)printDebugInformation:(NSString *)m channel:(IRCChannel *)channel;
+- (void)printDebugInformation:(NSString *)m channel:(IRCChannel *)channel command:(NSString *)command;
+
+- (void)printError:(NSString *)error forCommand:(NSString *)command;
+
+- (void)printErrorReply:(IRCMessage *)m;
+- (void)printErrorReply:(IRCMessage *)m channel:(IRCChannel *)channel;
+
+/* ******************************** Deprecated ********************************  */
+/* Use of these methods will throw an exception.								 */
+/* ****************************************************************************  */
+
+- (void)printError:(NSString *)error TEXTUAL_DEPRECATED;
+
+- (void)print:(id)chan type:(TVCLogLineType)type nick:(NSString *)nick text:(NSString *)text TEXTUAL_DEPRECATED;
+- (void)print:(id)chan type:(TVCLogLineType)type nick:(NSString *)nick text:(NSString *)text receivedAt:(NSDate *)receivedAt TEXTUAL_DEPRECATED;
+- (void)print:(id)chan type:(TVCLogLineType)type nick:(NSString *)nick text:(NSString *)text encrypted:(BOOL)isEncrypted receivedAt:(NSDate *)receivedAt TEXTUAL_DEPRECATED;
 @end

@@ -1,168 +1,129 @@
-// Created by Satoshi Nakagawa <psychs AT limechat DOT net> <http://github.com/psychs/limechat>
-// Modifications by Codeux Software <support AT codeux DOT com> <https://github.com/codeux/Textual>
-// You can redistribute it and/or modify it under the new BSD license.
+/* ********************************************************************* 
+       _____        _               _    ___ ____   ____
+      |_   _|___  _| |_ _   _  __ _| |  |_ _|  _ \ / ___|
+       | |/ _ \ \/ / __| | | |/ _` | |   | || |_) | |
+       | |  __/>  <| |_| |_| | (_| | |   | ||  _ <| |___
+       |_|\___/_/\_\\__|\__,_|\__,_|_|  |___|_| \_\\____|
 
-@class MasterController;
-@class IRCClient, IRCChannel, IRCChannelConfig, IRCClientConfig;
+ Copyright (c) 2010 — 2013 Codeux Software & respective contributors.
+        Please see Contributors.pdf and Acknowledgements.pdf
+
+ Redistribution and use in source and binary forms, with or without
+ modification, are permitted provided that the following conditions
+ are met:
+
+    * Redistributions of source code must retain the above copyright
+      notice, this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+    * Neither the name of the Textual IRC Client & Codeux Software nor the
+      names of its contributors may be used to endorse or promote products
+      derived from this software without specific prior written permission.
+
+ THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ SUCH DAMAGE.
+
+ *********************************************************************** */
+
+#import "TextualApplication.h"
 
 @interface IRCWorld : NSObject <NSOutlineViewDataSource, NSOutlineViewDelegate>
-{
-	MainWindow			*window;
-	ViewTheme			*viewTheme;
-	InputTextField		*text;
-	GrowlController		*growl;
-	LogController		*dummyLog;
-	MasterController	*master;
-	MenuController		*menuController;
-	
-	ServerList *serverList;
-	MemberList *memberList;
-	
-	NSBox *logBase;
-	
-	NSMenu *logMenu;
-	NSMenu *urlMenu;
-	NSMenu *addrMenu;
-	NSMenu *chanMenu;
-	NSMenu *treeMenu;
-	NSMenu *memberMenu;
-	NSMenu *serverMenu;
-	NSMenu *channelMenu;
-	
-	NSInteger messagesSent;
-	NSInteger messagesReceived;
-	
-	TXFSLongInt bandwidthIn;
-	TXFSLongInt bandwidthOut;
-	
-	IRCWorldConfig *config;
-	
-	NSMutableArray *clients;
-	
-	NSInteger itemId;
-	
-	BOOL soundMuted;
-	BOOL reloadingTree;
-	
-	IRCExtras *extrac;
-	
-	IRCTreeItem *selected;
-	
-	NSInteger previousSelectedClientId;
-	NSInteger previousSelectedChannelId;
-	
-	NSArray *allLoadedBundles;
-	NSArray *bundlesWithPreferences;
-	
-	NSDictionary *bundlesForUserInput;
-	NSDictionary *bundlesForServerInput;
-	NSDictionary *bundlesWithOutputRules;
-}
-
-@property (nonatomic, assign) ServerList *serverList;
-@property (nonatomic, assign) MemberList *memberList;
-@property (nonatomic, assign) MainWindow *window;
-@property (nonatomic, assign) ViewTheme *viewTheme;
-@property (nonatomic, assign) InputTextField *text;
-@property (nonatomic, assign) GrowlController *growl;
-@property (nonatomic, assign) MasterController *master;
-@property (nonatomic, retain) LogController *dummyLog;
-@property (nonatomic, assign) MenuController *menuController;
-@property (nonatomic, assign) NSBox *logBase;
-@property (nonatomic, assign) NSMenu *logMenu;
-@property (nonatomic, assign) NSMenu *urlMenu;
-@property (nonatomic, assign) NSMenu *addrMenu;
-@property (nonatomic, assign) NSMenu *chanMenu;
-@property (nonatomic, assign) NSMenu *treeMenu;
-@property (nonatomic, assign) NSMenu *memberMenu;
-@property (nonatomic, retain) NSMenu *serverMenu;
-@property (nonatomic, retain) NSMenu *channelMenu;
 @property (nonatomic, assign) NSInteger messagesSent;
 @property (nonatomic, assign) NSInteger messagesReceived;
 @property (nonatomic, assign) TXFSLongInt bandwidthIn;
 @property (nonatomic, assign) TXFSLongInt bandwidthOut;
-@property (nonatomic, retain) IRCWorldConfig *config;
-@property (nonatomic, assign) NSMutableArray *clients;
-@property (nonatomic, assign) NSInteger itemId;
-@property (nonatomic, assign) BOOL soundMuted;
-@property (nonatomic, assign) IRCExtras *extrac;
-@property (nonatomic, retain) IRCTreeItem *selected;
-@property (nonatomic, assign) NSInteger previousSelectedClientId;
-@property (nonatomic, assign) NSInteger previousSelectedChannelId;
-@property (nonatomic, retain) NSArray *allLoadedBundles;
-@property (nonatomic, retain) NSArray *bundlesWithPreferences;
-@property (nonatomic, retain) NSDictionary *bundlesForUserInput;
-@property (nonatomic, retain) NSDictionary *bundlesForServerInput;
-@property (nonatomic, retain) NSDictionary *bundlesWithOutputRules;
+@property (nonatomic, strong) NSMutableArray *clients;
+@property (nonatomic, assign) BOOL isSoundMuted;
+@property (nonatomic, assign) BOOL isPopulatingSeeds;
+@property (nonatomic, strong) IRCTreeItem *selectedItem;
+@property (nonatomic, strong) NSString *previousSelectedClientId;
+@property (nonatomic, strong) NSString *previousSelectedChannelId;
 
-- (void)setup:(IRCWorldConfig *)seed;
+- (void)setupConfiguration;
 - (void)setupTree;
 - (void)save;
+
 - (NSMutableDictionary *)dictionaryValue;
 
-- (void)setServerMenuItem:(NSMenuItem *)item;
-- (void)setChannelMenuItem:(NSMenuItem *)item;
-
-- (void)resetLoadedBundles;
+- (void)terminate;
 
 - (void)autoConnectAfterWakeup:(BOOL)afterWakeUp;
-- (void)terminate;
 - (void)prepareForSleep;
 
-- (IRCClient *)findClient:(NSString *)name;
-- (IRCClient *)findClientById:(NSInteger)uid;
-- (IRCChannel *)findChannelByClientId:(NSInteger)uid channelId:(NSInteger)cid;
+- (void)prepareForScreenSleep;
+- (void)awakeFomScreenSleep;
+
+- (IRCClient *)findClientById:(NSString *)uid;
+- (IRCChannel *)findChannelByClientId:(NSString *)uid channelId:(NSString *)cid;
 
 - (void)select:(id)item;
-- (void)selectChannelAt:(NSInteger)n;
-- (void)selectClientAt:(NSInteger)n;
 - (void)selectPreviousItem;
 
 - (IRCClient *)selectedClient;
 - (IRCChannel *)selectedChannel;
 - (IRCChannel *)selectedChannelOn:(IRCClient *)c;
+- (TVCLogController *)selectedViewController;
 
 - (IRCTreeItem *)previouslySelectedItem;
 
-- (void)focusInputText;
-- (BOOL)inputText:(id)str command:(NSString *)command;
+- (void)inputText:(id)str command:(NSString *)command;
 
 - (void)markAllAsRead;
+- (void)markAllAsRead:(IRCClient *)limitedClient;
+
 - (void)markAllScrollbacks;
 
 - (void)updateIcon;
 
+- (void)updateTitle;
+- (void)updateTitleFor:(IRCTreeItem *)item;
+
 - (void)reloadTree;
+- (void)reloadTreeItem:(IRCTreeItem *)item;
+- (void)reloadTreeGroup:(IRCTreeItem *)item;
+
 - (void)adjustSelection;
+
 - (void)expandClient:(IRCClient *)client;
 
-- (void)updateTitle;
-- (void)updateClientTitle:(IRCClient *)client;
-- (void)updateChannelTitle:(IRCChannel *)channel;
+- (void)addHighlightInChannel:(IRCChannel *)channel withLogLine:(TVCLogLine *)logLine;
 
-- (void)addHighlightInChannel:(IRCChannel *)channel withMessage:(NSString *)message;
-- (void)notifyOnGrowl:(NotificationType)type title:(NSString *)title desc:(NSString *)desc userInfo:(NSDictionary *)info;
-
-- (void)preferencesChanged;
 - (void)reloadTheme;
+- (void)preferencesChanged;
+
 - (void)changeTextSize:(BOOL)bigger;
+- (NSInteger)textSizeMultiplier;
 
-- (IRCClient *)createClient:(IRCClientConfig *)seed reload:(BOOL)reload;
+- (IRCClient *)createClient:(id)seed reload:(BOOL)reload;
 - (IRCChannel *)createChannel:(IRCChannelConfig *)seed client:(IRCClient *)client reload:(BOOL)reload adjust:(BOOL)adjust;
-- (IRCChannel *)createTalk:(NSString *)nick client:(IRCClient *)client;
+- (IRCChannel *)createPrivateMessage:(NSString *)nick client:(IRCClient *)client;
 
-- (void)destroyChannel:(IRCChannel *)c part:(BOOL)forcePart;
-- (void)destroyChannel:(IRCChannel *)c;
+- (TVCLogController *)createLogWithClient:(IRCClient *)client channel:(IRCChannel *)channel;
+
 - (void)destroyClient:(IRCClient *)client;
+- (void)destroyChannel:(IRCChannel *)c;
+- (void)destroyChannel:(IRCChannel *)c part:(BOOL)forcePart;
+
+- (void)executeScriptCommandOnAllViews:(NSString *)command arguments:(NSArray *)args;
 
 - (void)logKeyDown:(NSEvent *)e;
 - (void)logDoubleClick:(NSString *)s;
 
-- (void)createConnection:(NSString *)str chan:(NSString *)channel;
-
 - (void)clearContentsOfClient:(IRCClient *)u;
 - (void)clearContentsOfChannel:(IRCChannel *)c inClient:(IRCClient *)u;
 
-- (LogController *)createLogWithClient:(IRCClient *)client channel:(IRCChannel *)channel;
+- (void)destroyAllEvidence;
 
+- (void)muteSound;
+- (void)unmuteSound;
 @end

@@ -1,108 +1,48 @@
-// Created by Satoshi Nakagawa <psychs AT limechat DOT net> <http://github.com/psychs/limechat>
-// Modifications by Codeux Software <support AT codeux DOT com> <https://github.com/codeux/Textual>
-// You can redistribute it and/or modify it under the new BSD license.
+/* ********************************************************************* 
+       _____        _               _    ___ ____   ____
+      |_   _|___  _| |_ _   _  __ _| |  |_ _|  _ \ / ___|
+       | |/ _ \ \/ / __| | | |/ _` | |   | || |_) | |
+       | |  __/>  <| |_| |_| | (_| | |   | ||  _ <| |___
+       |_|\___/_/\_\\__|\__,_|\__,_|_|  |___|_| \_\\____|
 
-// IRCCI stands for IRC Command Index — this prefix is used to differentiate 
-// the below definitions to avoid clashes because of how common the names are. 
+ Copyright (c) 2010 — 2013 Codeux Software & respective contributors.
+        Please see Contributors.pdf and Acknowledgements.pdf
 
-#define IRCCI_ACTION			@"ACTION"
-#define IRCCI_ADCHAT			@"ADCHAT"
-#define IRCCI_AUTHENTICATE		@"AUTHENTICATE"
-#define IRCCI_AME				@"AME"
-#define IRCCI_AMSG				@"AMSG"
-#define IRCCI_AWAY				@"AWAY"
-#define IRCCI_BAN				@"BAN"
-#define IRCCI_CHATOPS			@"CHATOPS"
-#define IRCCI_CAP				@"CAP"
-#define IRCCI_CAPS				@"CAPS"
-#define IRCCI_CLEAR				@"CLEAR"
-#define IRCCI_CLEARALL			@"CLEARALL"
-#define IRCCI_CLIENTINFO		@"CLIENTINFO"
-#define IRCCI_CLOSE				@"CLOSE"
-#define IRCCI_CONN				@"CONN"
-#define IRCCI_CONNECT			@"CONN"
-#define IRCCI_CTCP				@"CTCP"
-#define IRCCI_CTCPREPLY			@"CTCPREPLY"
-#define IRCCI_CYCLE				@"CYCLE"
-#define IRCCI_DCC				@"DCC"
-#define IRCCI_DEBUG				@"DEBUG"
-#define IRCCI_DEHALFOP			@"DEHALFOP"
-#define IRCCI_DEOP				@"DEOP"
-#define IRCCI_DEVOICE			@"DEVOICE"
-#define IRCCI_ECHO				@"ECHO"
-#define IRCCI_ERROR				@"ERROR"
-#define IRCCI_GLINE				@"GLINE"
-#define IRCCI_GZLINE			@"GZLINE"
-#define IRCCI_GLOBOPS			@"GLOBOPS"
-#define IRCCI_HALFOP			@"HALFOP"
-#define IRCCI_HOP				@"HOP"
-#define IRCCI_ICBADGE			@"ICBADGE"
-#define IRCCI_CCBADGE			@"CCBADGE"
-#define IRCCI_IGNORE			@"IGNORE"
-#define IRCCI_INVITE			@"INVITE"
-#define IRCCI_ISON				@"ISON"
-#define IRCCI_J					@"J"
-#define IRCCI_JOIN				@"JOIN"
-#define IRCCI_KB				@"KB"
-#define IRCCI_KICK				@"KICK"
-#define IRCCI_KICKBAN			@"KICKBAN"
-#define IRCCI_KILL				@"KILL"
-#define IRCCI_LEAVE				@"LEAVE"
-#define IRCCI_LAGCHECK			@"LAGCHECK"
-#define IRCCI_LIST				@"LIST"
-#define IRCCI_LOAD_PLUGINS		@"LOAD_PLUGINS"
-#define IRCCI_LOCOPS			@"LOCOPS"
-#define IRCCI_M					@"M"
-#define IRCCI_ME				@"ME"
-#define IRCCI_MODE				@"MODE"
-#define IRCCI_MSG				@"MSG"
-#define IRCCI_MUTE				@"MUTE"
-#define IRCCI_MYLAG				@"MYLAG"
-#define IRCCI_MYVERSION			@"MYVERSION"
-#define IRCCI_NACHAT			@"NACHAT"
-#define IRCCI_NAMES				@"NAMES"
-#define IRCCI_NICK				@"NICK"
-#define IRCCI_NOTICE			@"NOTICE"
-#define IRCCI_OMSG				@"OMSG"
-#define IRCCI_ONOTICE			@"ONOTICE"
-#define IRCCI_OP				@"OP"
-#define IRCCI_PART				@"PART"
-#define IRCCI_PASS				@"PASS"
-#define IRCCI_PING				@"PING"
-#define IRCCI_PONG				@"PONG"
-#define IRCCI_PRIVMSG			@"PRIVMSG"
-#define IRCCI_QUERY				@"QUERY"
-#define IRCCI_QUIT				@"QUIT"
-#define IRCCI_QUOTE				@"QUOTE"
-#define IRCCI_RAW				@"RAW"
-#define IRCCI_REJOIN			@"REJOIN"
-#define IRCCI_REMOVE			@"REMOVE"
-#define IRCCI_SEND				@"SEND"
-#define IRCCI_SERVER			@"SERVER"
-#define IRCCI_SHUN				@"SHUN"
-#define IRCCI_T					@"T"
-#define IRCCI_TEMPSHUN			@"TEMPSHUN"
-#define IRCCI_TIME				@"TIME"
-#define IRCCI_TIMER				@"TIMER"
-#define IRCCI_TOPIC				@"TOPIC"
-#define IRCCI_UMODE				@"UMODE"
-#define IRCCI_UNBAN				@"UNBAN"
-#define IRCCI_UNIGNORE			@"UNIGNORE"
-#define IRCCI_UNLOAD_PLUGINS	@"UNLOAD_PLUGINS"
-#define IRCCI_UNMUTE			@"UNMUTE"
-#define IRCCI_USER				@"USER"
-#define IRCCI_USERINFO			@"USERINFO"
-#define IRCCI_VERSION			@"VERSION"
-#define IRCCI_VOICE				@"VOICE"
-#define IRCCI_WALLOPS			@"WALLOPS"
-#define IRCCI_WATCH				@"WATCH"
-#define IRCCI_WEIGHTS			@"WEIGHTS"
-#define IRCCI_WHO				@"WHO"
-#define IRCCI_WHOIS				@"WHOIS"
-#define IRCCI_WHOWAS			@"WHOWAS"
-#define IRCCI_ZLINE				@"ZLINE"
-#define IRCCI_SME				@"SME"
-#define IRCCI_SMSG				@"SMSG"
+ Redistribution and use in source and binary forms, with or without
+ modification, are permitted provided that the following conditions
+ are met:
 
-#define MAXIMUM_IRC_BODY_LEN	520
-#define MAXIMUM_SETS_PER_MODE	10
+    * Redistributions of source code must retain the above copyright
+      notice, this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+    * Neither the name of the Textual IRC Client & Codeux Software nor the
+      names of its contributors may be used to endorse or promote products
+      derived from this software without specific prior written permission.
+
+ THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ SUCH DAMAGE.
+
+ *********************************************************************** */
+
+#import "TextualApplication.h"
+
+#define TXMaximumIRCBodyLength				512
+#define TXMaximumIRCNicknameLength			50
+#define TXMaximumNodesPerModeCommand		4
+
+/* "*" is not actually considered a valid character for a nickname. We include it for ZNC. */
+#define IRCNicknameValidCharacters          @"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-\\[]{}^`|*"
+
+TEXTUAL_EXTERN NSString *IRCPrivateCommandIndex(const char *key); 
+TEXTUAL_EXTERN NSString *IRCPublicCommandIndex(const char *key); 

@@ -1,99 +1,109 @@
-// Created by Satoshi Nakagawa <psychs AT limechat DOT net> <http://github.com/psychs/limechat>
-// You can redistribute it and/or modify it under the new BSD license.
+/* ********************************************************************* 
+       _____        _               _    ___ ____   ____
+      |_   _|___  _| |_ _   _  __ _| |  |_ _|  _ \ / ___|
+       | |/ _ \ \/ / __| | | |/ _` | |   | || |_) | |
+       | |  __/>  <| |_| |_| | (_| | |   | ||  _ <| |___
+       |_|\___/_/\_\\__|\__,_|\__,_|_|  |___|_| \_\\____|
+
+ Copyright (c) 2010 — 2013 Codeux Software & respective contributors.
+        Please see Contributors.pdf and Acknowledgements.pdf
+
+ Redistribution and use in source and binary forms, with or without
+ modification, are permitted provided that the following conditions
+ are met:
+
+    * Redistributions of source code must retain the above copyright
+      notice, this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+    * Neither the name of the Textual IRC Client & Codeux Software nor the
+      names of its contributors may be used to endorse or promote products
+      derived from this software without specific prior written permission.
+
+ THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ SUCH DAMAGE.
+
+ *********************************************************************** */
+
+#import "TextualApplication.h"
 
 @implementation IRCSendingMessage
 
-@synthesize command;
-@synthesize params;
-@synthesize completeColon;
-
-- (id)initWithCommand:(NSString *)aCommand
++ (NSInteger)colonIndexForCommand:(NSString *)command
 {
-	if ((self = [super init])) {
-		params = [NSMutableArray new];
+	/* The command index that Textual uses is complex for anyone who 
+	 has never seen it before, but on the other hand, it is also very
+	 convenient for storing static information about any IRC command
+	 that Textual may handle. For example, the internal command list
+	 keeps track of where the colon (:) should be placed for specific
+	 outgoing commands. Better than guessing. */
+	
+	NSArray *searchPath = [TPCPreferences IRCCommandIndex:NO];
+
+	for (NSArray *indexInfo in searchPath) {
+		if (indexInfo.count == 5) {
+			NSString *matValue = indexInfo[1];
+
+			if ([matValue isEqualIgnoringCase:command] && [indexInfo boolAtIndex:3] == YES) {
+				return [indexInfo integerAtIndex:4];
+			}
+		}
+ 	}
+	
+	return -1;
+}
+
++ (NSString *)stringWithCommand:(NSString *)command arguments:(NSArray *)argList
+{
+	NSMutableString *builtString = [NSMutableString string];
+
+	[builtString appendString:command.uppercaseString];
+
+	NSObjectIsEmptyAssertReturn(argList, builtString);
+
+	NSInteger colonIndexBase = [IRCSendingMessage colonIndexForCommand:command];
+	NSInteger colonIndexCount = 0;
+
+	for (NSString *param in argList) {
+		NSObjectIsEmptyAssertLoopContinue(param);
 		
-		completeColon = YES;
-		
-		command = [[aCommand uppercaseString] retain];
+		[builtString appendString:NSStringWhitespacePlaceholder];
+
+		if (colonIndexBase == -1) {
+			// Guess where the colon (:) should go.
+			//
+			// A colon is supposed to represent a section of an outgoing command
+			// that has a paramater which contains spaces. For example, PRIVMSG
+			// is in the formoat "PRIVMSG #channel :long message" — The message
+			// will have spaces part of it, so we inform the server.
+			
+			if (colonIndexCount == (argList.count - 1) && ([param hasPrefix:@":"] || [param contains:NSStringWhitespacePlaceholder])) {
+				[builtString appendString:@":"];
+			}
+		} else {
+			// We know where it goes thanks to the command index.
+			
+			if (colonIndexCount == colonIndexBase) {
+				[builtString appendString:@":"];
+			}
+		}
+
+		[builtString appendString:param];
+
+		colonIndexCount += 1;
 	}
 
-	return self;
-}
-
-- (void)dealloc
-{
-	[command drain];
-	[params drain];
-	
-	[super dealloc];
-}
-
-- (void)addParameter:(NSString *)parameter
-{
-	[params safeAddObject:parameter];
-}
-
-- (NSString *)string
-{
-	if (NSObjectIsEmpty(string)) {
-		BOOL forceCompleteColon = NO;
-		
-		if ([command isEqualToString:IRCCI_PRIVMSG] || [command isEqualToString:IRCCI_NOTICE]) {
-			forceCompleteColon = YES;
-		} else if ([command isEqualToString:IRCCI_NICK]
-				 || [command isEqualToString:IRCCI_MODE]
-				 || [command isEqualToString:IRCCI_JOIN]
-				 || [command isEqualToString:IRCCI_NAMES]
-				 || [command isEqualToString:IRCCI_WHO]
-				 || [command isEqualToString:IRCCI_LIST]
-				 || [command isEqualToString:IRCCI_INVITE]
-				 || [command isEqualToString:IRCCI_WHOIS]
-				 || [command isEqualToString:IRCCI_WHOWAS]
-				 || [command isEqualToString:IRCCI_ISON]
-				 || [command isEqualToString:IRCCI_USER]) {
-			
-			completeColon = NO;
-		}
-		
-		NSMutableString *d = [NSMutableString new];
-		
-		[d appendString:command];
-		
-		NSInteger count = [params count];
-		
-		if (NSObjectIsNotEmpty(params)) {
-			for (NSInteger i = 0; i < (count - 1); ++i) {
-				NSString *s = [params safeObjectAtIndex:i];
-				
-				[d appendString:NSWhitespaceCharacter];
-				[d appendString:s];
-			}
-			
-			[d appendString:NSWhitespaceCharacter];
-			
-			NSString *s = [params safeObjectAtIndex:(count - 1)];
-			
-			BOOL firstColonOrSpace = NO;
-			
-			if (NSObjectIsNotEmpty(s)) {
-				UniChar c = [s characterAtIndex:0];
-				
-				firstColonOrSpace = (c == ' ' || c == ':');
-			}
-			
-			if (forceCompleteColon || (completeColon && (NSObjectIsEmpty(s) || firstColonOrSpace))) {
-				[d appendString:@":"];
-			}
-			
-			[d appendString:s];
-		}
-		
-		[d appendString:@"\r\n"];
-		
-		string = d;
-	}
-	
-	return string;
+	return builtString;
 }
 
 @end

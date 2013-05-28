@@ -1,202 +1,274 @@
-// Created by Satoshi Nakagawa <psychs AT limechat DOT net> <http://github.com/psychs/limechat>
-// Modifications by Codeux Software <support AT codeux DOT com> <https://github.com/codeux/Textual>
-// You can redistribute it and/or modify it under the new BSD license.
+/* ********************************************************************* 
+       _____        _               _    ___ ____   ____
+      |_   _|___  _| |_ _   _  __ _| |  |_ _|  _ \ / ___|
+       | |/ _ \ \/ / __| | | |/ _` | |   | || |_) | |
+       | |  __/>  <| |_| |_| | (_| | |   | ||  _ <| |___
+       |_|\___/_/\_\\__|\__,_|\__,_|_|  |___|_| \_\\____|
 
-#define COLOR_NUMBER_MAX	30
+ Copyright (c) 2010 — 2013 Codeux Software & respective contributors.
+        Please see Contributors.pdf and Acknowledgements.pdf
 
-@interface IRCUser (Private)
-- (void)decayConversation;
-@end
+ Redistribution and use in source and binary forms, with or without
+ modification, are permitted provided that the following conditions
+ are met:
+
+    * Redistributions of source code must retain the above copyright
+      notice, this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+    * Neither the name of the Textual IRC Client & Codeux Software nor the
+      names of its contributors may be used to endorse or promote products
+      derived from this software without specific prior written permission.
+
+ THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ SUCH DAMAGE.
+
+ *********************************************************************** */
+
+#import "TextualApplication.h"
+
+#define _colorNumberMax				 30
 
 @implementation IRCUser
-
-@synthesize username;
-@synthesize address;
-@synthesize q;
-@synthesize a;
-@synthesize o;
-@synthesize h;
-@synthesize v;
-@synthesize isMyself;
-@synthesize incomingWeight;
-@synthesize outgoingWeight;
-@synthesize nick;
-@synthesize lastFadedWeights;
-@synthesize supportInfo;
 
 - (id)init
 {
 	if ((self = [super init])) {
-		colorNumber = -1;
-		
-		lastFadedWeights = CFAbsoluteTimeGetCurrent();
+		self.colorNumber = -1;
+		self.lastWeightFade = CFAbsoluteTimeGetCurrent();
 	}
-
+	
 	return self;
 }
 
-- (void)dealloc
+- (NSString *)hostmask
 {
-	[nick drain];
-	[address drain];
-	[username drain];
+	NSObjectIsEmptyAssertReturn(self.username, nil);
+	NSObjectIsEmptyAssertReturn(self.address, nil);
+	NSObjectIsEmptyAssertReturn(self.nickname, nil);
 	
-	[super dealloc];
+	return [NSString stringWithFormat:@"%@!%@@%@", self.nickname, self.username, self.address];
 }
 
 - (NSString *)banMask
 {
-	if (NSObjectIsEmpty(address)) {
-		return [NSString stringWithFormat:@"%@!*@*", nick];
+	NSObjectIsEmptyAssertReturn(self.nickname, nil);
+	
+	if (NSObjectIsEmpty(self.username) || NSObjectIsEmpty(self.address)) {
+		return [NSString stringWithFormat:@"%@!*@*", self.nickname];
 	} else {
-		NSString *ident = ((username) ?: @"*");
-		
-		switch ([Preferences banFormat]) {
-			case HMBAN_FORMAT_WHNIN:  return [NSString stringWithFormat:@"*!*@%@", address];	
-			case HMBAN_FORMAT_WHAINN: return [NSString stringWithFormat:@"*!%@@%@", ident, address];
-			case HMBAN_FORMAT_WHANNI: return [NSString stringWithFormat:@"%@!*%@", nick, address];
-			case HMBAN_FORMAT_EXACT:  return [NSString stringWithFormat:@"%@!%@@%@", nick, ident, address];
+		switch ([TPCPreferences banFormat]) {
+			case TXHostmaskBanWHNINFormat: {
+				return [NSString stringWithFormat:@"*!*@%@", self.address];
+			} case TXHostmaskBanWHAINNFormat: {
+				return [NSString stringWithFormat:@"*!%@@%@", self.username, self.address];
+			} case TXHostmaskBanWHANNIFormat: {
+				return [NSString stringWithFormat:@"%@!*%@", self.nickname, self.address];
+			} case TXHostmaskBanExactFormat: {
+				return [NSString stringWithFormat:@"%@!%@@%@", self.nickname, self.username, self.address];
+			}
 		}
 	}
 	
 	return nil;
 }
 
-- (char)mark
+- (NSString *)mark
 {
-	if (q) return [supportInfo.userModeQPrefix safeCharacterAtIndex:0];
-	if (a) return [supportInfo.userModeAPrefix safeCharacterAtIndex:0];
-	if (o) return [supportInfo.userModeOPrefix safeCharacterAtIndex:0];
-	if (h) return [supportInfo.userModeHPrefix safeCharacterAtIndex:0];
-	if (v) return [supportInfo.userModeVPrefix safeCharacterAtIndex:0];
+	if (self.q) {
+		return [self.supportInfo userModePrefixSymbol:@"q"];
+	} else if (self.a) {
+		return [self.supportInfo userModePrefixSymbol:@"a"];
+	} else if (self.o) {
+		return [self.supportInfo userModePrefixSymbol:@"o"];
+	} else if (self.h) {
+		return [self.supportInfo userModePrefixSymbol:@"h"];
+	} else if (self.v) {
+		return [self.supportInfo userModePrefixSymbol:@"v"];
+	} else if (self.isCop) {
+		return [self.supportInfo userModePrefixSymbol:@"y"]; // InspIRCd-2.0
+	}
 	
-	return ' ';
+	return nil;
 }
 
 - (BOOL)isOp
 {
-	return (o || a || q);
+	return (self.o || self.a || self.q);
 }
 
 - (BOOL)isHalfOp 
 {
-	return (h || [self isOp]);
+	return (self.h || self.o || self.a || self.q);
 }
 
 - (NSInteger)colorNumber
 {
-	if (colorNumber < 0) {
-		colorNumber = (CFHash([nick lowercaseString]) % COLOR_NUMBER_MAX);
+	if (_colorNumber < 0) {
+		NSString *hashName = self.nickname.lowercaseString;
+
+		if ([RZUserDefaults() boolForKey:@"UUIDBasedNicknameColorHashing"]) {
+			hashName = [NSString stringWithUUID];
+		}
+		
+		self.colorNumber = (hashName.hash % _colorNumberMax);
 	}
 	
-	return colorNumber;
+	return _colorNumber;
 }
 
-- (BOOL)hasMode:(char)mode
+- (BOOL)isEqual:(id)other
 {
-	switch (mode) {
-		case 'q': return q;
-		case 'a': return a;
-		case 'o': return o;
-		case 'h': return h;
-		case 'v': return v;
-	}
+	NSAssertReturnR([other isKindOfClass:[IRCUser class]], NO);
 	
-	return NO;
+	return [self.nickname isEqualIgnoringCase:[other nickname]];
+}
+
+- (NSUInteger)hash
+{
+	return self.nickname.lowercaseString.hash;
 }
 
 - (CGFloat)totalWeight
 {
 	[self decayConversation];
-	
-	return (incomingWeight + outgoingWeight);
+
+	return (self.incomingWeight + self.outgoingWeight);
 }
 
 - (void)outgoingConversation
 {
-	CGFloat change = ((outgoingWeight == 0) ? 20 : 5);
-	
-	outgoingWeight += change;
+	CGFloat change = ((self.outgoingWeight == 0) ? 20 : 5);
+
+	_outgoingWeight += change;
 }
 
 - (void)incomingConversation
 {
-	CGFloat change = ((incomingWeight == 0) ? 100 : 20);
-	
-	incomingWeight += change;
+	CGFloat change = ((self.incomingWeight == 0) ? 100 : 20);
+
+	_incomingWeight += change;
 }
 
 - (void)conversation
 {
-	CGFloat change = ((outgoingWeight == 0) ? 4 : 1);
-	
-	outgoingWeight += change;
+	CGFloat change = ((self.incomingWeight == 0) ? 4 : 1);
+
+	_incomingWeight += change;
 }
 
 - (void)decayConversation
 {
 	CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
-	CGFloat minutes = ((now - lastFadedWeights) / 60);
-	
+
+	CGFloat minutes = ((now - self.lastWeightFade) / 60);
+
 	if (minutes > 1) {
-		lastFadedWeights = now;
-		
-		if (incomingWeight > 0) {
-			incomingWeight /= pow(2, minutes);
-		}
-		
-		if (outgoingWeight > 0) {
-			outgoingWeight /= pow(2, minutes);
-		}
-	}
-}
+		self.lastWeightFade = now;
 
-- (BOOL)isEqual:(id)other
-{
-	if ([other isKindOfClass:[IRCUser class]] == NO) return NO;
-	
-	return ([nick caseInsensitiveCompare:[(id)other nick]] == NSOrderedSame);
-}
+		if (self.incomingWeight > 0) {
+			_incomingWeight /= pow(2, minutes);
+		}
 
-- (NSComparisonResult)compare:(IRCUser *)other
-{
-	if (NSDissimilarObjects(q, other.q)) {
-		return ((q) ? NSOrderedAscending : NSOrderedDescending);
-	} else if (q) {
-		return [nick caseInsensitiveCompare:other.nick];
-	} else if (NSDissimilarObjects(a, other.a)) {
-		return ((a) ? NSOrderedAscending : NSOrderedDescending);
-	} else if (a) {
-		return [nick caseInsensitiveCompare:other.nick];
-	} else if (NSDissimilarObjects(o, other.o)) {
-		return ((o) ? NSOrderedAscending : NSOrderedDescending);
-	} else if (o) {
-		return [nick caseInsensitiveCompare:other.nick];
-	} else if (NSDissimilarObjects(h, other.h)) {
-		return ((h) ? NSOrderedAscending : NSOrderedDescending);
-	} else if (h) {
-		return [nick caseInsensitiveCompare:other.nick];
-	} else if (NSDissimilarObjects(v, other.v)) {
-		return ((v) ? NSOrderedAscending : NSOrderedDescending);
-	} else {
-		return [nick caseInsensitiveCompare:other.nick];
+		if (self.outgoingWeight > 0) {
+			_outgoingWeight /= pow(2, minutes);
+		}
 	}
 }
 
 - (NSComparisonResult)compareUsingWeights:(IRCUser *)other
 {
-	CGFloat mine   = self.totalWeight;
-	CGFloat others = other.totalWeight;
+	CGFloat local = self.totalWeight;
+	CGFloat remte = other.totalWeight;
 
-	if (mine > others) return NSOrderedAscending;
-	if (mine < others) return NSOrderedDescending;
+	if (local > remte) {
+		return NSOrderedAscending;
+	}
 	
-	return [[nick lowercaseString] compare:[other.nick lowercaseString]];
+	if (local < remte) {
+		return NSOrderedDescending;
+	}
+
+	return [self compare:other];
+}
+
+- (NSComparisonResult)compare:(IRCUser *)other
+{
+	/* If the user specifically requests that the IRCops get placed higher but
+	 the server doesn't support the y prefix, place them at the top, but sort
+	 them by their ranks within the channel instead of just alphabetically.
+
+	 Otherwise we sort by their channel rank since the y prefix will naturally
+	 float to the top. 
+	 
+	 Example on a server without the y prefix:
+	 
+	 q and IRCop is the topmost
+	 a and IRCop next
+	 ...
+	 no rank and IRCop next
+	 q and NOT IRCop next
+	 a and NOT IRCop next
+	 and so on
+	 */
+
+	BOOL favorIRCop = [TPCPreferences memberListSortFavorsServerStaff];
+
+	NSComparisonResult rank = NSInvertedComparisonResult([@(self.channelRank) compare:@(other.channelRank)]);
+
+	if (favorIRCop && self.isCop && BOOLReverseValue(other.isCop)) {
+		return NSOrderedAscending;
+	} else if (favorIRCop && BOOLReverseValue(self.isCop) && other.isCop) {
+		return NSOrderedDescending;
+	} else if (rank == NSOrderedSame) {
+		return [self.nickname caseInsensitiveCompare:other.nickname];
+	} else {
+		return rank;
+	}
+}
+
+- (NSInteger)channelRank
+{
+	if (self.isCop && [self.supportInfo modeIsSupportedUserPrefix:@"y"]) {
+		return 6;
+	} else if (self.q) {
+		return 5;
+	} else if (self.a) {
+		return 4;
+	} else if (self.o) {
+		return 3;
+	} else if (self.h) {
+		return 2;
+	} else if (self.v) {
+		return 1;
+	} else {
+		return 0;
+	}
+}
+
++ (NSComparator)nicknameLengthComparator
+{
+	return [^(id obj1, id obj2){
+		IRCUser *s1 = obj1;
+		IRCUser *s2 = obj2;
+
+		return (s1.nickname.length <= s2.nickname.length);
+	} copy];
 }
 
 - (NSString *)description
 {
-	return [NSString stringWithFormat:@"<IRCUser %c%@>", self.mark, nick];
+	return [NSString stringWithFormat:@"<IRCUser %@%@>", self.mark, self.nickname];
 }
 
 @end
